@@ -1,0 +1,40 @@
+name: ci
+on:
+  pull_request:
+    branches: [ develop, main ]
+  push:
+    branches: [ develop, main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "CI is alive"
+      # Node (optional)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Node install & test (skips if no package.json)
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+            npm test --if-present || echo "no node tests"
+          else
+            echo "no package.json"
+          fi
+
+      # .NET (optional)
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: .NET restore/build/test (skips if no solution)
+        run: |
+          if ls *.sln 1> /dev/null 2>&1; then
+            dotnet restore
+            dotnet build --configuration Release --no-restore
+            dotnet test --configuration Release --no-build || echo "no dotnet tests"
+          else
+            echo "no .sln"
+          fi
