@@ -1,0 +1,17 @@
+name: Deploy to S3 (dev)
+
+on:
+  push:
+    branches: [ develop ]   # runs when you push/merge to 'develop'
+
+permissions:
+  id-token: write           # needed for OIDC (AuthN)
+  contents: read            # read the repo to build
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev        # uses the GitHub Environment you created
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
