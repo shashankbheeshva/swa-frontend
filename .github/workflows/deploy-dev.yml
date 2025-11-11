@@ -1,0 +1,61 @@
+name: Deploy to S3 (dev)
+
+on:
+  push:
+    branches: [ develop ]   # runs when you push/merge to 'develop'
+
+permissions:
+  id-token: write           # needed for OIDC (AuthN)
+  contents: read            # read the repo to build
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev        # uses the GitHub Environment you created
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          
+      - name: Install dependencies
+        run: |
+          if [ -f package.json ]; then
+            echo "Trying npm ci (strict install)..."
+            npm ci || (echo "npm ci failed, falling back to npm install" && npm install)
+          else
+            echo "no package.json"
+          fi
+
+      - name: Build app
+        run: npm run build
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install AWS CLI v2
+        uses: unfor19/install-aws-cli-action@v1
+
+      - name: Find build output folder
+        id: outdir
+        run: |
+          if [ -d "dist" ]; then echo "dir=dist" >> $GITHUB_OUTPUT; \
+          elif [ -d "build" ]; then echo "dir=build" >> $GITHUB_OUTPUT; \
+          else echo "No dist/build folder found"; exit 1; fi
+
+      - name: Sync files to S3 (dev)
+        run: |
+          aws s3 sync "${{ steps.outdir.outputs.dir }}/" "s3://${{ vars.S3_BUCKET }}/" --delete
+
+      - name: Make index.html uncacheable (SPA friendly)
+        run: |
+          aws s3 cp "s3://${{ vars.S3_BUCKET }}/index.html" "s3://${{ vars.S3_BUCKET }}/index.html" \
+            --metadata-directive REPLACE \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "text/html" \
+
